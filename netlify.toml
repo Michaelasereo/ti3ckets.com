@@ -1,0 +1,31 @@
+[build]
+  command = "cd apps/web && npm run build"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NEXT_PUBLIC_API_URL = "https://api.getiickets.com"
+  NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY = "pk_live_xxxx"
+
+[context.production.environment]
+  NEXT_PUBLIC_APP_ENV = "production"
+
+[context.deploy-preview.environment]
+  NEXT_PUBLIC_APP_ENV = "staging"
+  NEXT_PUBLIC_API_URL = "https://staging-api.getiickets.com"
+
+[dev]
+  command = "cd apps/web && npm run dev"
+  port = 3000
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://api.getiickets.com/api/:splat"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

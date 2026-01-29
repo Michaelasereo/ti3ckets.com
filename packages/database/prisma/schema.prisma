@@ -1,0 +1,362 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                  String            @id @default(cuid())
+  email               String            @unique
+  phone               String?           @unique
+  name                String?
+  passwordHash        String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  accountLockedUntil  DateTime?
+  emailVerified              Boolean           @default(false)
+  emailVerifiedAt            DateTime?
+  emailVerificationCode      String?
+  emailVerificationExpiresAt  DateTime?
+  emailVerificationAttempts   Int               @default(0)
+  lastVerificationSentAt      DateTime?
+  failedLoginAttempts         Int               @default(0)
+  lastLoginAt                 DateTime?
+  buyerProfile        BuyerProfile?
+  events              Event[]           @relation("Organizer")
+  orders              Order[]
+  organizerProfile    OrganizerProfile?
+  roles               UserRole[]
+  payouts             Payout[]
+
+  @@map("users")
+}
+
+model Event {
+  id            String       @id @default(cuid())
+  organizerId   String
+  title         String
+  slug          String       @unique
+  description   String?
+  category      String
+  imageUrl      String?
+  bannerUrl     String?
+  venueName     String
+  venueAddress  String
+  city          String
+  country       String       @default("Nigeria")
+  isVirtual     Boolean      @default(false)
+  startDateTime DateTime
+  endDateTime   DateTime
+  timezone      String       @default("Africa/Lagos")
+  saleStart     DateTime
+  saleEnd       DateTime
+  isSeated      Boolean      @default(false)
+  status        EventStatus  @default(DRAFT)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  organizer     User         @relation("Organizer", fields: [organizerId], references: [id])
+  orders        Order[]
+  seats         Seat[]
+  ticketTypes   TicketType[]
+  tickets       Ticket[]
+  promoCodes    PromoCode[]
+
+  @@index([organizerId])
+  @@index([startDateTime])
+  @@index([city])
+  @@index([status, saleStart, saleEnd])
+  @@map("events")
+}
+
+model TicketType {
+  id               String    @id @default(cuid())
+  eventId          String
+  name             String
+  description      String?
+  price            Decimal   @db.Decimal(10, 2)
+  currency         String    @default("NGN")
+  totalQuantity    Int
+  soldQuantity     Int       @default(0)
+  reservedQuantity Int       @default(0)
+  maxPerOrder      Int       @default(4)
+  minPerOrder      Int       @default(1)
+  saleStart        DateTime?
+  saleEnd          DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  event            Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tickets          Ticket[]
+  waitlists        Waitlist[]
+
+  @@index([eventId])
+  @@map("ticket_types")
+}
+
+model Seat {
+  id      String     @id @default(cuid())
+  eventId String
+  section String
+  row     String?
+  number  String
+  tier    String?
+  status  SeatStatus @default(AVAILABLE)
+  event   Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticket  Ticket?
+
+  @@unique([eventId, section, row, number])
+  @@index([eventId, status])
+  @@map("seats")
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  userId         String?
+  eventId        String
+  orderNumber    String      @unique
+  status         OrderStatus @default(PENDING)
+  totalAmount    Decimal     @db.Decimal(10, 2)
+  currency       String      @default("NGN")
+  customerEmail  String
+  customerName   String?
+  customerPhone  String?
+  paymentMethod  String?
+  paystackRef    String?     @unique
+  paymentStatus  String?
+  promoCode      String?
+  discountAmount Decimal?    @db.Decimal(10, 2)
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  paidAt         DateTime?
+  metadata       Json?
+  event          Event       @relation(fields: [eventId], references: [id])
+  user           User?       @relation(fields: [userId], references: [id])
+  tickets        Ticket[]
+
+  @@index([eventId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([paystackRef])
+  @@index([status])
+  @@index([eventId, status])
+  @@map("orders")
+}
+
+model Ticket {
+  id              String       @id @default(cuid())
+  orderId         String
+  eventId         String
+  ticketTypeId    String
+  seatId          String?      @unique
+  ticketNumber    String       @unique
+  qrCode          String
+  qrCodeUrl       String?
+  pdfUrl          String?
+  barcode         String?
+  attendeeName    String?
+  attendeeEmail   String?
+  attendeePhone   String?
+  status          TicketStatus @default(VALID)
+  checkedInAt     DateTime?
+  checkedInBy     String?
+  transferredFrom String?
+  transferredAt   DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  event           Event        @relation(fields: [eventId], references: [id])
+  order           Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  seat            Seat?        @relation(fields: [seatId], references: [id])
+  ticketType      TicketType   @relation(fields: [ticketTypeId], references: [id])
+
+  @@index([eventId])
+  @@index([orderId])
+  @@index([ticketNumber])
+  @@map("tickets")
+}
+
+model InventoryReservation {
+  id            String   @id @default(cuid())
+  eventId       String
+  ticketTypeId  String?
+  quantity      Int
+  reservationId String   @unique
+  expiresAt     DateTime
+  orderId       String?
+
+  @@index([expiresAt])
+  @@index([reservationId])
+  @@map("inventory_reservations")
+}
+
+model PromoCode {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  description    String?
+  discountType   String
+  discountValue  Decimal  @db.Decimal(10, 2)
+  maxUses        Int?
+  currentUses    Int      @default(0)
+  maxUsesPerUser Int      @default(1)
+  validFrom      DateTime
+  validUntil     DateTime
+  isActive       Boolean  @default(true)
+  eventId        String?
+  minOrderAmount Decimal? @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  event          Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([code, isActive, validFrom, validUntil])
+  @@map("promo_codes")
+}
+
+model Waitlist {
+  id           String      @id @default(cuid())
+  eventId      String
+  email        String
+  phone        String?
+  ticketTypeId String?
+  quantity     Int         @default(1)
+  notified     Boolean     @default(false)
+  notifiedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  ticketType   TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, email, ticketTypeId])
+  @@index([eventId, notified])
+  @@index([ticketTypeId])
+  @@map("waitlist")
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  role      Role     @default(BUYER)
+  grantedAt DateTime @default(now())
+  grantedBy String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@map("user_roles")
+}
+
+model BuyerProfile {
+  id                     String    @id @default(cuid())
+  userId                 String    @unique
+  firstName              String?
+  lastName               String?
+  dateOfBirth            DateTime?
+  address                String?
+  city                   String?
+  country                String?
+  preferredPaymentMethod String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("buyer_profiles")
+}
+
+model OrganizerProfile {
+  id                     String                      @id @default(cuid())
+  userId                 String                      @unique
+  businessName           String
+  businessType           String?
+  taxId                  String?
+  businessAddress        String?
+  businessCity           String?
+  businessCountry        String?
+  verificationStatus     OrganizerVerificationStatus @default(VERIFIED)
+  verifiedAt             DateTime?
+  stripeConnectAccountId String?
+  payoutDetails          Json?
+  onboardingCompleted    Boolean                     @default(false)
+  avatarUrl              String?
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  user                   User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payouts                Payout[]
+
+  @@map("organizer_profiles")
+}
+
+model Payout {
+  id                 String            @id @default(cuid())
+  organizerId        String
+  amount             Decimal           @db.Decimal(10, 2)
+  currency           String            @default("NGN")
+  status             PayoutStatus      @default(PENDING)
+  paystackRef        String?           @unique
+  bankAccount        Json?
+  requestedAt        DateTime          @default(now())
+  processedAt        DateTime?
+  failureReason      String?
+  organizer          User              @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  OrganizerProfile   OrganizerProfile? @relation(fields: [organizerProfileId], references: [id])
+  organizerProfileId String?
+
+  @@index([organizerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payouts")
+}
+
+enum Role {
+  BUYER
+  ORGANIZER
+  ADMIN
+}
+
+enum OrganizerVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  LIVE
+  SOLD_OUT
+  CANCELLED
+  COMPLETED
+}
+
+enum SeatStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  BLOCKED
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum TicketStatus {
+  VALID
+  USED
+  CANCELLED
+  TRANSFERRED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
