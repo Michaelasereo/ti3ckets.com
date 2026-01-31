@@ -3,21 +3,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { useState, useEffect, Fragment } from 'react';
-import type { CurrentUser } from '@/lib/auth/server';
+import { useState, Fragment } from 'react';
+import { useAuthContext } from '@/components/providers/AuthProvider';
 import RoleSwitcher from './RoleSwitcher';
 import OrganizerSettingsMenu from './OrganizerSettingsMenu';
 
-function getStoredUser(): { id: string; email?: string; name?: string } | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem('user') ?? sessionStorage.getItem('user');
-    if (!raw) return null;
-    return JSON.parse(raw) as { id: string; email?: string; name?: string };
-  } catch {
-    return null;
-  }
-}
+const LAUNCH_MODE = process.env.NEXT_PUBLIC_LAUNCH_MODE !== 'false';
 
 interface NavItem {
   href: string;
@@ -27,7 +18,8 @@ interface NavItem {
 
 function getNavItems(activeRole?: string, isLoggedIn: boolean = false, pathname?: string): NavItem[] {
   const commonItems: NavItem[] = [
-    { href: '/events', label: 'Browse events', role: 'common' }
+    { href: '/events', label: 'Browse events', role: 'common' },
+    { href: '/waitlist', label: 'Waitlist', role: 'common' },
   ];
   
   const buyerItems: NavItem[] = [
@@ -61,78 +53,65 @@ function getNavItems(activeRole?: string, isLoggedIn: boolean = false, pathname?
   return items;
 }
 
-export default function Header({ initialUser }: { initialUser: CurrentUser } = { initialUser: null }) {
+export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
-  const [user, setUser] = useState<{ id: string; email?: string; name?: string; roles?: string[] } | null>(
-    initialUser
-      ? {
-          id: initialUser.id,
-          email: initialUser.email,
-          name: initialUser.name,
-          roles: initialUser.roles,
-        }
-      : null,
-  );
-  const [activeRole, setActiveRole] = useState<string | undefined>(initialUser?.activeRole);
-
-  useEffect(() => {
-    checkAuth();
-    const onStorage = () => checkAuth();
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  useEffect(() => {
-    // When user was loaded on the server, skip re-fetching on every pathname change.
-    if (initialUser != null) return;
-    checkAuth();
-  }, [pathname, initialUser]);
-
-  const checkAuth = async () => {
-    try {
-      const { usersApi, authApi } = await import('@/lib/api');
-      const [userResponse, sessionResponse] = await Promise.all([
-        usersApi.getMe(),
-        authApi.getSession().catch(() => ({ data: { success: false } })),
-      ]);
-      
-      if (userResponse.data.success) {
-        setUser(userResponse.data.data);
-      } else {
-        setUser(null);
+  const { user: contextUser, refreshUser } = useAuthContext();
+  const user = contextUser
+    ? {
+        id: contextUser.id,
+        email: contextUser.email,
+        name: contextUser.name,
+        roles: contextUser.roles,
       }
-
-      // Get active role from session
-      if (sessionResponse.data.success) {
-        setActiveRole(sessionResponse.data.data.activeRole);
-      }
-    } catch {
-      // Fallback to stored user for UI (session might be expired)
-      setUser(getStoredUser());
-    }
-  };
+    : null;
+  const activeRole = contextUser?.activeRole;
 
   const handleLogout = async () => {
     try {
-      // Call logout API to delete session and clear cookie
       const { authApi } = await import('@/lib/api');
       await authApi.logout();
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Clear local storage (user info for UI)
       localStorage.removeItem('user');
       sessionStorage.removeItem('user');
-      setUser(null);
+      await refreshUser();
       setIsMenuOpen(false);
       router.push('/');
     }
   };
 
   const isLoggedIn = !!user;
+
+  if (LAUNCH_MODE) {
+    return (
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <nav className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-center">
+            <span className="flex items-center gap-2 shrink-0 pointer-events-none" aria-hidden>
+              {!logoError ? (
+                <Image
+                  src="/Logo-beta.png"
+                  alt="getiickets"
+                  width={140}
+                  height={36}
+                  className="h-9 w-auto object-contain"
+                  priority
+                  unoptimized
+                  onError={() => setLogoError(true)}
+                />
+              ) : (
+                <span className="text-xl font-bold text-primary-900">getiickets</span>
+              )}
+            </span>
+          </div>
+        </nav>
+      </header>
+    );
+  }
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -141,7 +120,7 @@ export default function Header({ initialUser }: { initialUser: CurrentUser } = {
           <Link href="/" className="flex items-center gap-2 shrink-0">
             {!logoError ? (
               <Image
-                src="/Logo.png"
+                src="/Logo-beta.png"
                 alt="getiickets"
                 width={140}
                 height={36}

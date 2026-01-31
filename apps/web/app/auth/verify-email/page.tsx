@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { authApi } from '@/lib/api';
 
 export default function VerifyEmailPage() {
@@ -209,6 +208,19 @@ export default function VerifyEmailPage() {
               {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Tap to resend'}
             </button>
           </p>
+          {typeof window !== 'undefined' && window.location.hostname === 'localhost' && email && (
+            <p className="mt-3 text-xs text-gray-500">
+              Dev: get code from{' '}
+              <a
+                href={`/api/debug/verification-code?email=${encodeURIComponent(email)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-400 hover:underline break-all"
+              >
+                /api/debug/verification-code?email=...
+              </a>
+            </p>
+          )}
         </div>
       </div>
     </div>

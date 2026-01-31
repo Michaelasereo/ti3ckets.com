@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
+const LAUNCH_MODE = process.env.NEXT_PUBLIC_LAUNCH_MODE !== 'false';
+
 export default function Footer() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -13,6 +15,20 @@ export default function Footer() {
     setEmail('');
     setTimeout(() => setSubmitted(false), 3000);
   };
+
+  if (LAUNCH_MODE) {
+    return (
+      <footer className="bg-primary-900 text-white">
+        <div className="container mx-auto px-4 py-8">
+          <div className="border-t border-white/10 pt-6">
+            <p className="text-sm text-white/60 text-center">
+              Copyright © {new Date().getFullYear()}. ti3cket.com. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
+    );
+  }
 
   return (
     <footer className="bg-primary-900 text-white">
@@ -143,7 +159,7 @@ export default function Footer() {
 
         <div className="border-t border-white/10 mt-12 pt-8">
           <p className="text-sm text-white/60">
-            Copyright © {new Date().getFullYear()}. Tix Technology Inc. All rights reserved.
+            Copyright © {new Date().getFullYear()}. ti3cket.com. All rights reserved.
           </p>
         </div>
       </div>

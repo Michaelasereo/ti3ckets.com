@@ -48,3 +48,6 @@ terraform.tfstate.backup
 
 # Prisma
 prisma/migrations/*.sql
+
+# Local Netlify folder
+.netlify

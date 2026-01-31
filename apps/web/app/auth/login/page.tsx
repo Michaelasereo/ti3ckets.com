@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { authApi } from '@/lib/api';
 import PasswordInput from '@/components/forms/PasswordInput';
+import { useAuthContext } from '@/components/providers/AuthProvider';
 
 function isSafeRedirect(next: string | null): boolean {
   if (!next || typeof next !== 'string') return false;
@@ -16,6 +17,7 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextUrl = searchParams.get('next');
+  const { refreshUser } = useAuthContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -35,12 +37,15 @@ export default function LoginPage() {
 
       if (response.data.success) {
         const { user } = response.data.data;
-        
+
         // Store user info in localStorage/sessionStorage for UI (not for auth)
         // Session cookie is set automatically by browser
         const storage = rememberMe ? localStorage : sessionStorage;
         storage.setItem('user', JSON.stringify(user));
-        
+
+        // Update AuthProvider so header/nav reflect logged-in state immediately
+        await refreshUser();
+
         const roles = user.roles || [];
         const hasMultipleRoles = roles.includes('BUYER') && roles.includes('ORGANIZER');
         const redirectTo = isSafeRedirect(nextUrl) ? nextUrl : null;
@@ -57,7 +62,19 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
+      const status = err.response?.status;
+      const msg = err.response?.data?.error;
+      if (err.code === 'ECONNREFUSED' || err.message === 'Network Error' || !err.response) {
+        setError('Cannot reach server. Is the API running? Start it with: cd apps/api && npm run dev');
+      } else if (status === 502 || status === 503 || status === 504) {
+        setError('Server unavailable. Make sure the API is running on port 8080.');
+      } else if (status === 401) {
+        setError(msg || 'Invalid email or password.');
+      } else if (status >= 500) {
+        setError(msg || 'Server error. Try again later.');
+      } else {
+        setError(msg || 'Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }

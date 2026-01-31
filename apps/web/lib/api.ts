@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { APIPerformance } from '@/lib/perf';
 
-// Use same origin when NEXT_PUBLIC_API_URL is unset (Next.js API routes on same port)
+// All API routes served by Next.js on same origin (port 3000)
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const GET_CACHE_TTL_MS = 10000;
@@ -44,7 +44,7 @@ function setCachedResponse(config: { method?: string; url?: string; params?: unk
 const apiClient = axios.create({
   baseURL: API_URL,
   withCredentials: true, // Important: send cookies with requests
-  timeout: 10000, // 10 second timeout
+  timeout: 25000, // 25 second timeout (events/list can be slow on cold DB)
   headers: {
     'Content-Type': 'application/json',
   },
@@ -136,16 +136,6 @@ apiClient.interceptors.response.use(
       const delay = RETRY_DELAY_MS * Math.pow(2, retryCount);
       await new Promise((resolve) => setTimeout(resolve, delay));
       return apiClient(config);
-    }
-
-    // Dev resilience: same-origin fallback when external API unreachable
-    const isBrowser = typeof window !== 'undefined';
-    const hasExternalBaseUrl = Boolean(API_URL);
-    const isNetworkError = !error?.response;
-
-    if (isBrowser && hasExternalBaseUrl && isNetworkError && config && !config.__sameOriginRetry) {
-      config.__sameOriginRetry = true;
-      return apiClient({ ...config, baseURL: '' });
     }
 
     return Promise.reject(error);
@@ -456,6 +446,12 @@ export const adminApi = {
       freeTicketsThreshold?: number;
       minimumPayoutThreshold?: number;
     }) => apiClient.patch('/api/v1/admin/settings', data),
+  },
+  launchWaitlist: {
+    list: (params?: { page?: number; limit?: number }) =>
+      apiClient.get('/api/v1/admin/launch-waitlist', { params }),
+    exportCsv: () =>
+      apiClient.get('/api/v1/admin/launch-waitlist/export', { responseType: 'blob' }),
   },
 };
 

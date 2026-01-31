@@ -4,27 +4,28 @@ A comprehensive ticketing platform for events across Africa, built with Next.js,
 
 ## Architecture
 
-- **Frontend**: Next.js 14 (TypeScript) deployed on Netlify
-- **Backend**: Node.js 18+ with Fastify
-- **Database**: Supabase PostgreSQL (managed, cloud)
-- **Cache**: Upstash Redis (serverless, cloud)
-- **Storage**: AWS S3 + CloudFront
+- **App**: Next.js 14 (TypeScript) — frontend and API routes on a single server (port 3000)
+- **Database**: Supabase PostgreSQL (managed, cloud); Prisma in `apps/web`
+- **Cache**: Upstash Redis (serverless, cloud) for sessions; in-memory fallback in dev
+- **Storage**: AWS S3 + CloudFront (when configured)
 - **Payments**: Paystack
 - **Email**: Brevo (Sendinblue)
 - **SMS**: Twilio
+
+The legacy Express API in `apps/api` (port 8080) is no longer used for standard development; all APIs run in Next.js.
 
 ## Project Structure
 
 ```text
 getiickets/
 ├── apps/
-│   ├── web/          # Next.js 14 Frontend
-│   └── api/           # Node.js Backend API
+│   ├── web/          # Next.js 14 (frontend + API routes, Prisma)
+│   └── api/          # Legacy Express API (reference only)
 ├── packages/
-│   ├── shared/        # Shared TypeScript types
-│   ├── database/      # Prisma client exports
-│   └── config/        # Shared configs
-└── scripts/           # Development scripts
+│   ├── shared/       # Shared TypeScript types
+│   ├── database/     # Prisma schema (used by api; web has its own copy)
+│   └── config/       # Shared configs
+└── scripts/          # Development scripts
 ```
 
 ## Getting Started
@@ -55,14 +56,14 @@ npm install
    - See [UPSTASH_SETUP.md](./UPSTASH_SETUP.md) for detailed instructions
 
 1. **Configure environment variables**
-   - Update `apps/api/.env` with your Supabase and Upstash credentials
-   - Update `apps/web/.env.local` with your API URL and Paystack keys
+   - Create `apps/web/.env.local` with `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`, `BREVO_API_KEY`, `JWT_SECRET`, `PAYSTACK_SECRET_KEY`, `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`, etc.
    - See [ENV_VARIABLES.md](./ENV_VARIABLES.md) for all required variables
+   - **Launch mode**: By default the homepage shows only the waitlist form (no nav links, no footer links). Set `NEXT_PUBLIC_LAUNCH_MODE=false` in `.env.local` to show the full site (events, auth, etc.).
 
 1. **Run database migrations**
 
    ```bash
-   cd packages/database
+   cd apps/web
    npx prisma generate
    npx prisma db push
    ```
@@ -71,45 +72,38 @@ npm install
 
 ### Development
 
-**Start development servers:**
+**Start the app (single server on port 3000):**
 
 ```bash
 # Use the convenience script (recommended)
 ./scripts/start-dev.sh
 
-# Or manually:
-# Terminal 1: Start API
-cd apps/api && npm run dev
+# Or from root:
+npm run dev
 
-# Terminal 2: Start Frontend
+# Or from web app:
 cd apps/web && npm run dev
 ```
 
-If the page loads **without CSS** (unstyled content), start the frontend from the web app directory so Next.js finds PostCSS and Tailwind config: run `npm run dev:web` from the repo root, or `cd apps/web && npm run dev`. Then open http://localhost:3000.
+Open **http://localhost:3000**. All API routes are served by Next.js on the same port; no separate API server is required.
 
 ### Dev Demo Mode (Organizer end-to-end without auth)
 
 To demo the full organizer flow locally **without needing real login/session cookies**, enable demo mode flags and seed the demo organizer.
 
-1. **Seed the demo organizer user**
+1. **Seed the demo organizer user** (if you have a seed script in apps/web or packages/database)
 
 ```bash
-cd apps/api
-npm run seed
+cd apps/web && npx prisma db seed
+# or from packages/database if seed exists there
 ```
 
 1. **Enable demo mode**
 
-- `apps/api/.env`:
-  - `DEMO_MODE=true`
-  - (optional) `DEMO_USER_ID=demo-organizer-user`
-  - (optional) `DEMO_USER_EMAIL=organizer.demo+4821@example.com`
-
 - `apps/web/.env.local`:
+  - `DEMO_MODE=true` (if supported)
   - `NEXT_PUBLIC_DEMO_MODE=true`
-  - (optional) `NEXT_PUBLIC_DEMO_USER_ID=demo-organizer-user`
-  - (optional) `NEXT_PUBLIC_DEMO_USER_EMAIL=organizer.demo+4821@example.com`
-  - (optional) `NEXT_PUBLIC_DEMO_USER_NAME=Demo Organizer`
+  - (optional) `NEXT_PUBLIC_DEMO_USER_ID`, `NEXT_PUBLIC_DEMO_USER_EMAIL`, `NEXT_PUBLIC_DEMO_USER_NAME`
 
 1. **Demo credentials (if you want to log in normally)**
 
@@ -127,11 +121,11 @@ npm run seed
   - Organizer: `/organizer/events/[id]/orders`
 - **Waitlist**: Buyers can join via `POST /api/v1/waitlist` (e.g. when event is sold out). Organizer views entries and exports CSV from the event **Waitlist** tab.
 
-**Stop development servers:**
+**Login not working?**
 
-```bash
-./scripts/stop-dev.sh
-```
+- Login and all API routes run in Next.js on port 3000. Ensure `apps/web` is running (`npm run dev` or `./scripts/start-dev.sh`).
+- For "Invalid email or password", use an account you registered at `/auth/register`, or use the demo credentials above if you ran the seed and set demo mode.
+- Health check: `GET http://localhost:3000/api/health` returns database status.
 
 ### Build
 
@@ -149,8 +143,7 @@ See [ENV_VARIABLES.md](./ENV_VARIABLES.md) for complete documentation of all req
 
 Quick reference:
 
-- `apps/api/.env` - Backend configuration (Supabase, Upstash, Paystack, etc.)
-- `apps/web/.env.local` - Frontend configuration (API URL, Paystack public key)
+- `apps/web/.env.local` - All configuration: `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`, `BREVO_API_KEY`, `JWT_SECRET`, `PAYSTACK_SECRET_KEY`, `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`, etc. No separate API server; everything runs on port 3000.
 
 ## Setup Guides
 
@@ -164,10 +157,9 @@ Quick reference:
 
 ## Scripts
 
-- `npm run dev` - Start all apps via Turbo (from root)
-- `npm run dev:web` - Start only the Next.js frontend (from root; use if page loads without CSS)
-- `./scripts/start-dev.sh` - Start development servers
-- `./scripts/stop-dev.sh` - Stop development servers
+- `npm run dev` - Start Next.js app only (Turbo filter: web) — single server on port 3000
+- `npm run dev:web` - Start Next.js from root
+- `./scripts/start-dev.sh` - Generate Prisma client and start Next.js (port 3000)
 - `./scripts/setup-supabase.sh` - Interactive Supabase setup
 - `./scripts/cleanup.sh` - Clean up temporary files
 

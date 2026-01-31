@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Start Development Servers
-# This script starts the API and Web applications locally
-# Database and Redis are provided by Supabase and Upstash (cloud services)
+# Start Development (single app: Next.js on port 3000)
+# All API routes are served by Next.js; no separate API server.
+# Database and Redis are provided by Supabase and Upstash (cloud services).
 
 set -e
 
@@ -15,65 +15,54 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Ensure NODE_ENV is set to development for proper dependency installation
+# Ensure NODE_ENV is set to development
 export NODE_ENV=development
 
-# Check if .env files exist
-if [ ! -f "apps/api/.env" ]; then
-    echo -e "${RED}❌ Error: apps/api/.env not found${NC}"
-    echo "Please create apps/api/.env with your Supabase and Upstash credentials"
-    echo "See SUPABASE_SETUP.md and UPSTASH_SETUP.md for instructions"
-    exit 1
-fi
-
+# Check if .env.local exists in web app
 if [ ! -f "apps/web/.env.local" ]; then
     echo -e "${YELLOW}⚠️  Warning: apps/web/.env.local not found${NC}"
     echo "Creating default .env.local..."
     cat > apps/web/.env.local << 'EOF'
-# API URL
-NEXT_PUBLIC_API_URL="http://localhost:3000"
+# Database (Supabase or local Postgres)
+DATABASE_URL="postgresql://user:password@localhost:5432/tickets"
+DIRECT_URL="postgresql://user:password@localhost:5432/tickets"
+
+# Redis (Upstash or local)
+REDIS_URL="redis://localhost:6379"
+
+# Auth
+JWT_SECRET="your-secret-key-change-in-production"
+COOKIE_SECRET="your-cookie-secret-min-32-chars"
+
+# Brevo (email)
+BREVO_API_KEY=""
 
 # Paystack
 NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY="pk_test_xxxx"
+PAYSTACK_SECRET_KEY="sk_test_xxxx"
 
-# App Environment
+# App
 NEXT_PUBLIC_APP_ENV="development"
 EOF
+    echo "Please edit apps/web/.env.local with your credentials."
 fi
 
-# Check environment variables
 echo -e "${GREEN}📋 Checking environment configuration...${NC}"
-
-# Check DATABASE_URL
-if grep -q "YOUR-PASSWORD\|PROJECT-ID" apps/api/.env; then
-    echo -e "${YELLOW}⚠️  Warning: DATABASE_URL contains placeholders${NC}"
-    echo "Please update apps/api/.env with your Supabase credentials"
-    echo "See SUPABASE_SETUP.md for instructions"
+if grep -q "YOUR-PASSWORD\|PROJECT-ID\|your-secret" apps/web/.env.local 2>/dev/null; then
+    echo -e "${YELLOW}⚠️  Warning: .env.local may contain placeholders${NC}"
+    echo "See SUPABASE_SETUP.md and UPSTASH_SETUP.md for instructions"
 fi
-
-# Check REDIS_URL
-if grep -q "PASSWORD\|ENDPOINT" apps/api/.env; then
-    echo -e "${YELLOW}⚠️  Warning: REDIS_URL contains placeholders${NC}"
-    echo "Please update apps/api/.env with your Upstash credentials"
-    echo "See UPSTASH_SETUP.md for instructions"
-fi
-
-echo ""
-echo -e "${GREEN}✅ Environment files found${NC}"
 echo ""
 
-# Check if Node.js is installed
+# Check Node.js
 if ! command -v node &> /dev/null; then
     echo -e "${RED}❌ Error: Node.js is not installed${NC}"
-    echo "Please install Node.js 18+ from https://nodejs.org"
     exit 1
 fi
 
-# Check Node.js version
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
 if [ "$NODE_VERSION" -lt 18 ]; then
-    echo -e "${RED}❌ Error: Node.js version 18+ required${NC}"
-    echo "Current version: $(node -v)"
+    echo -e "${RED}❌ Error: Node.js 18+ required${NC}"
     exit 1
 fi
 
@@ -86,88 +75,20 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-if [ ! -d "apps/api/node_modules" ]; then
-    echo -e "${GREEN}📦 Installing API dependencies...${NC}"
-    cd apps/api && npm install && cd ../..
-fi
-
 if [ ! -d "apps/web/node_modules" ]; then
-    echo -e "${GREEN}📦 Installing Web dependencies...${NC}"
+    echo -e "${GREEN}📦 Installing web dependencies...${NC}"
     cd apps/web && npm install && cd ../..
 fi
 
-# Check Prisma Client
-if [ ! -d "packages/database/node_modules/.prisma" ]; then
-    echo -e "${GREEN}📦 Generating Prisma Client...${NC}"
-    cd packages/database && npx prisma generate && cd ../..
-fi
+# Generate Prisma Client (apps/web has its own Prisma)
+echo -e "${GREEN}📦 Generating Prisma Client...${NC}"
+cd apps/web && npx prisma generate && cd ../..
 
 echo ""
-echo -e "${GREEN}🚀 Starting development servers...${NC}"
-echo ""
-echo "📡 API Server:    http://localhost:8080"
-echo "🌐 Web App:       http://localhost:3000"
-echo ""
-echo "Press Ctrl+C to stop all servers"
+echo -e "${GREEN}🚀 Starting Next.js (single server on port 3000)...${NC}"
+echo "🌐 Web + API: http://localhost:3000"
+echo "Press Ctrl+C to stop"
 echo ""
 
-# Function to cleanup on exit
-cleanup() {
-    echo ""
-    echo -e "${YELLOW}🛑 Stopping servers...${NC}"
-    kill $API_PID $WEB_PID 2>/dev/null || true
-    exit 0
-}
-
-trap cleanup SIGINT SIGTERM
-
-# Start API server in background
-echo -e "${GREEN}▶️  Starting API server...${NC}"
-cd apps/api
-npm run dev > /tmp/getiickets-api.log 2>&1 &
-API_PID=$!
-cd ../..
-
-# Wait a bit for API to start
-sleep 2
-
-# Start Web server in background
-echo -e "${GREEN}▶️  Starting Web server...${NC}"
 cd apps/web
-npm run dev > /tmp/getiickets-web.log 2>&1 &
-WEB_PID=$!
-cd ../..
-
-# Wait for servers to be ready
-echo ""
-echo -e "${GREEN}⏳ Waiting for servers to start...${NC}"
-sleep 3
-
-# Check if servers are running
-if ps -p $API_PID > /dev/null && ps -p $WEB_PID > /dev/null; then
-    echo ""
-    echo -e "${GREEN}✅ Development servers started successfully!${NC}"
-    echo ""
-    echo "📡 API Server:    http://localhost:8080"
-    echo "🌐 Web App:       http://localhost:3000"
-    echo ""
-    echo "📋 Logs:"
-    echo "   API: tail -f /tmp/getiickets-api.log"
-    echo "   Web: tail -f /tmp/getiickets-web.log"
-    echo ""
-    echo "Press Ctrl+C to stop all servers"
-    echo ""
-    
-    # Wait for user interrupt
-    wait $API_PID $WEB_PID
-else
-    echo -e "${RED}❌ Error: Failed to start servers${NC}"
-    echo ""
-    echo "API Logs:"
-    tail -20 /tmp/getiickets-api.log
-    echo ""
-    echo "Web Logs:"
-    tail -20 /tmp/getiickets-web.log
-    exit 1
-fi
-
+exec npm run dev

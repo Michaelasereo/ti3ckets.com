@@ -35,9 +35,10 @@ export default function LandingEventGrid({ initialEvents = [] }: LandingEventGri
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // If we already have server-loaded events, show them and optionally refresh in background
+    // If we already have server-loaded events, show them and skip client refetch to avoid timeout/duplicate load
     if (initialEvents.length > 0) {
       setLoading(false);
+      return;
     }
     async function fetchEvents() {
       setError(null);
@@ -46,19 +47,16 @@ export default function LandingEventGrid({ initialEvents = [] }: LandingEventGri
         const res = await eventsApi.list({ limit: 8 });
         setEvents(res.data?.data || []);
       } catch (err: unknown) {
-        // Keep server data if we had it; only clear and show error when we had nothing
-        if (initialEvents.length === 0) {
-          setEvents([]);
-          let message = 'Request failed';
-          if (err && typeof err === 'object') {
-            const ax = err as { message?: string; response?: { status?: number; statusText?: string } };
-            if (ax.response?.status) message = `API ${ax.response.status} ${ax.response.statusText || ''}`.trim();
-            else if (ax.message) message = String(ax.message);
-          }
-          setError(message);
-          if (typeof window !== 'undefined') {
-            console.error('[LandingEventGrid] Events API error:', err);
-          }
+        setEvents([]);
+        let message = 'Request failed';
+        if (err && typeof err === 'object') {
+          const ax = err as { message?: string; response?: { status?: number; statusText?: string } };
+          if (ax.response?.status) message = `API ${ax.response.status} ${ax.response.statusText || ''}`.trim();
+          else if (ax.message) message = String(ax.message);
+        }
+        setError(message);
+        if (typeof window !== 'undefined') {
+          console.error('[LandingEventGrid] Events API error:', err);
         }
       } finally {
         setLoading(false);

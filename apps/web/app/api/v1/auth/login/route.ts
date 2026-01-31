@@ -1,11 +1,3 @@
-/**
- * NOTE: In development, this route is bypassed by Next.js rewrites that proxy
- * /api/* requests to the Fastify API server (port 8080). This route serves as
- * a fallback for production or when Fastify is unavailable.
- * 
- * To use Fastify API in dev, ensure API_URL is set in .env.local and Fastify
- * is running on port 8080. The rewrite in next.config.js will handle proxying.
- */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';

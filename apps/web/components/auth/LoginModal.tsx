@@ -68,7 +68,19 @@ export default function LoginModal({
       }
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
+      const status = err.response?.status;
+      const msg = err.response?.data?.error;
+      if (err.code === 'ECONNREFUSED' || err.message === 'Network Error' || !err.response) {
+        setError('Cannot reach server. Is the API running? (cd apps/api && npm run dev)');
+      } else if (status === 502 || status === 503 || status === 504) {
+        setError('Server unavailable. Make sure the API is running on port 8080.');
+      } else if (status === 401) {
+        setError(msg || 'Invalid email or password.');
+      } else if (status >= 500) {
+        setError(msg || 'Server error. Try again later.');
+      } else {
+        setError(msg || 'Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }

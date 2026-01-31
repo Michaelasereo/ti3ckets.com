@@ -9,33 +9,84 @@ export type CurrentUser = {
   activeRole?: string;
 } | null;
 
-// Read the raw session ID from the cookie jar in a server component or layout.
-export function getSessionIdFromCookies(): string | null {
-  const cookieStore = cookies();
-  return cookieStore.get('session')?.value ?? null;
+const AUTH_FETCH_TIMEOUT_MS = 3000;
+const AUTH_FETCH_RETRIES = 1;
+
+/** API base URL: in dev use same origin so Next rewrites /api/* to backend; in prod use env. */
+function getApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+  }
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000';
+  }
+  return '';
 }
 
-const AUTH_FETCH_TIMEOUT_MS = 2000;
+/** Fetch with timeout and optional retries. */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  config: { retries: number; timeout: number } = { retries: 1, timeout: AUTH_FETCH_TIMEOUT_MS }
+): Promise<Response> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= config.retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), config.timeout);
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error: unknown) {
+      const err = error as Error & { name?: string };
+      lastError = err;
+      if (err?.name === 'AbortError') {
+        console.warn(`[AUTH] Fetch timeout on attempt ${attempt + 1}`);
+      } else {
+        console.warn(`[AUTH] Fetch error on attempt ${attempt + 1}:`, err?.message);
+      }
+      if (attempt < config.retries) {
+        await new Promise((r) => setTimeout(r, 100 * Math.pow(2, attempt)));
+        continue;
+      }
+    }
+  }
+  throw lastError ?? new Error('Auth fetch failed');
+}
 
-// Request-scoped: multiple calls to getCurrentUser() in the same request reuse this.
+// Read the raw session ID from the cookie jar in a server component or layout.
+export function getSessionIdFromCookies(): string | null {
+  try {
+    const cookieStore = cookies();
+    return cookieStore.get('session')?.value ?? null;
+  } catch (error) {
+    console.warn('[AUTH] Failed to read cookies:', error);
+    return null;
+  }
+}
+
 async function fetchCurrentUser(sessionId: string): Promise<CurrentUser> {
-  const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || '';
-  const url = apiBase ? `${apiBase}/api/v1/users/me` : 'http://localhost:3000/api/v1/users/me';
+  const apiBase = getApiBaseUrl();
+  const url = `${apiBase}/api/v1/users/me`;
+  console.log('[DEBUG] fetchCurrentUser: url', url);
 
-  const fetchPromise = fetch(url, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: `session=${sessionId}`,
+  const response = await fetchWithRetry(
+    url,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `session=${sessionId}`,
+      },
     },
-    cache: 'no-store',
-  });
-
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Auth fetch timeout')), AUTH_FETCH_TIMEOUT_MS)
+    { retries: AUTH_FETCH_RETRIES, timeout: AUTH_FETCH_TIMEOUT_MS }
   );
 
-  const response = await Promise.race([fetchPromise, timeoutPromise]);
+  console.log('[DEBUG] fetchCurrentUser: response', response.status, response.ok);
 
   if (!response.ok) {
     return null;
@@ -69,15 +120,16 @@ const getCurrentUserCached = cache(async (sessionId: string | null): Promise<Cur
   }
   try {
     return await fetchCurrentUser(sessionId);
-  } catch {
+  } catch (error) {
+    console.warn('[AUTH] Failed to fetch user:', error);
     return null;
   }
 });
 
-// Fetch the current user by calling the existing API route using the same origin.
-// Deduplicated per request via React cache(); one /users/me call per request.
 export async function getCurrentUser(): Promise<CurrentUser> {
   const sessionId = getSessionIdFromCookies();
-  return getCurrentUserCached(sessionId);
+  console.log('[DEBUG] getCurrentUser: sessionId', sessionId ? 'present' : 'absent');
+  const user = await getCurrentUserCached(sessionId);
+  console.log('[DEBUG] getCurrentUser: result', user ? 'ok' : 'null');
+  return user;
 }
-

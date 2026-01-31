@@ -1,15 +1,18 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/tickets/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/events/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/organizer/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-sans)', 'Helvetica', 'Arial', 'sans-serif'],
-        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
+        sans: ['var(--font-sans)', 'Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
+        mono: ['var(--font-mono)', 'DM Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         primary: {
@@ -26,6 +29,12 @@ module.exports = {
         },
         accent: {
           orange: '#f97316',
+        },
+        ticket: {
+          primary: '#1e40af',
+          vip: '#f59e0b',
+          soldout: '#dc2626',
+          available: '#10b981',
         },
       },
     },

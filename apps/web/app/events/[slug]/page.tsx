@@ -405,7 +405,10 @@ export default function EventDetailPage() {
                                     ticketTypeName: ticketType.name,
                                   })
                                 }
-                                className="w-full px-4 py-2 text-sm bg-primary-100 text-primary-900 rounded-lg hover:bg-primary-200 transition font-medium"
+                                className="w-full px-6 py-3.5 text-white rounded-xl font-semibold hover:opacity-90 transition"
+                                style={{
+                                  background: 'linear-gradient(90deg, #192030 0%, #C74576 100%)',
+                                }}
                               >
                                 Join Waitlist
                               </button>
@@ -471,7 +474,10 @@ export default function EventDetailPage() {
                                   ticketTypeName: ticketType.name,
                                 })
                               }
-                              className="w-full px-4 py-2 text-sm bg-primary-100 text-primary-900 rounded-lg hover:bg-primary-200 transition font-medium"
+                              className="w-full px-6 py-3.5 text-white rounded-xl font-semibold hover:opacity-90 transition"
+                              style={{
+                                background: 'linear-gradient(90deg, #192030 0%, #C74576 100%)',
+                              }}
                             >
                               Join Waitlist
                             </button>

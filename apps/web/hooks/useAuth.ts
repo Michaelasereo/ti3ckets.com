@@ -1,43 +1,31 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { usersApi } from '@/lib/api';
+import { useAuthContext } from '@/components/providers/AuthProvider';
 
-interface AuthState {
+export interface AuthState {
   isAuthenticated: boolean;
   loading: boolean;
-  user: any | null;
+  user: { id: string; email?: string; name?: string; roles?: string[] } | null;
+  refreshUser?: () => Promise<void>;
 }
 
+/**
+ * Auth state from AuthProvider (single source of truth; no duplicate GET /users/me).
+ * Must be used within AuthProvider (root layout wraps the app with it).
+ */
 export function useAuth(): AuthState {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any | null>(null);
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      setLoading(true);
-      const response = await usersApi.getMe();
-      
-      if (response.data.success) {
-        setIsAuthenticated(true);
-        setUser(response.data.data);
-      } else {
-        setIsAuthenticated(false);
-        setUser(null);
-      }
-    } catch (error) {
-      // User is not authenticated
-      setIsAuthenticated(false);
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
+  const { user, isLoading, refreshUser } = useAuthContext();
+  return {
+    isAuthenticated: !!user,
+    loading: isLoading,
+    user: user
+      ? {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          roles: user.roles,
+        }
+      : null,
+    refreshUser,
   };
-
-  return { isAuthenticated, loading, user };
 }

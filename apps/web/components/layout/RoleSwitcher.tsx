@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { authApi, usersApi } from '@/lib/api';
+import { authApi } from '@/lib/api';
+import { useAuthContext } from '@/components/providers/AuthProvider';
 
 interface RoleSwitcherProps {
   userRoles?: string[];
@@ -12,6 +13,7 @@ interface RoleSwitcherProps {
 export default function RoleSwitcher({ userRoles = [], activeRole }: RoleSwitcherProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { refreshUser } = useAuthContext();
   const [isOpen, setIsOpen] = useState(false);
   const [currentRole, setCurrentRole] = useState<string>(activeRole || 'buyer');
   const [loading, setLoading] = useState(false);
@@ -63,6 +65,7 @@ export default function RoleSwitcher({ userRoles = [], activeRole }: RoleSwitche
 
     try {
       await authApi.switchRole(role);
+      await refreshUser();
 
       // Redirect to appropriate dashboard based on selected role
       if (role === 'organizer') {
@@ -73,18 +76,7 @@ export default function RoleSwitcher({ userRoles = [], activeRole }: RoleSwitche
     } catch (error) {
       console.error('Failed to switch role:', error);
       setCurrentRole(previousRoleRef.current);
-      // Reload user data to get current state
-      try {
-        const response = await usersApi.getMe();
-        if (response.data.success) {
-          const sessionResponse = await authApi.getSession();
-          if (sessionResponse.data.success) {
-            setCurrentRole(sessionResponse.data.data.activeRole || 'buyer');
-          }
-        }
-      } catch (err) {
-        console.error('Failed to refresh user data:', err);
-      }
+      await refreshUser();
     } finally {
       setLoading(false);
     }

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
-import { OrganizerVerificationStatus } from '@prisma/client';
 
 export default function AdminOrganizerDetailPage() {
   const params = useParams();

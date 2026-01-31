@@ -80,6 +80,14 @@ export async function requireAuth(request: Request): Promise<AuthUser> {
   return user;
 }
 
+export async function requireRole(request: Request, role: string): Promise<AuthUser> {
+  const user = await requireAuth(request);
+  if (!user.roles?.includes(role)) {
+    throw new ApiError(403, `Forbidden: requires ${role} role`);
+  }
+  return user;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);

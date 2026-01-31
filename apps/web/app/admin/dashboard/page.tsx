@@ -175,6 +175,13 @@ export default function AdminDashboardPage() {
             <h3 className="font-semibold text-primary-900 mb-1">System Settings</h3>
             <p className="text-sm text-gray-600">Configure platform settings</p>
           </a>
+          <a
+            href="/admin/waitlist"
+            className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+          >
+            <h3 className="font-semibold text-primary-900 mb-1">Launch waitlist</h3>
+            <p className="text-sm text-gray-600">View signups and export CSV</p>
+          </a>
         </div>
       </div>
     </div>
